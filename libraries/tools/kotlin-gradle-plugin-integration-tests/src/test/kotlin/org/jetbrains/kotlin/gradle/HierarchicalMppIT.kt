@@ -26,7 +26,7 @@ class HierarchicalMppIT : BaseGradleIT() {
         get() = gradleVersion
 
     companion object {
-        private val gradleVersion = GradleVersionRequired.Exact("6.5")
+        private val gradleVersion = GradleVersionRequired.FOR_MPP_SUPPORT
     }
 
     @Test
