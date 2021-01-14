@@ -40,14 +40,6 @@ private fun createRootPublication(project: Project, publishing: PublishingExtens
         from(kotlinSoftwareComponent)
         (this as MavenPublicationInternal).publishWithOriginalFileName()
         kotlinSoftwareComponent.publicationDelegate = this@apply
-
-        /*
-        project.multiplatformExtension.metadata().kotlinComponents
-            .filterIsInstance<KotlinTargetComponentWithPublication>()
-            .single().publicationDelegate = this@apply
-            TODO NOW
-         */
-
         kotlinSoftwareComponent.sourcesArtifacts.forEach { sourceArtifact ->
             artifact(sourceArtifact)
         }
@@ -57,10 +49,9 @@ private fun createRootPublication(project: Project, publishing: PublishingExtens
 private fun createTargetPublications(project: Project, publishing: PublishingExtension) {
     val kotlin = project.multiplatformExtension
     // Enforce the order of creating the publications, since the metadata publication is used in the other publications:
-    //kotlin.metadata().createMavenPublications(publishing.publications)
     kotlin.targets
         .withType(AbstractKotlinTarget::class.java)
-        .matching { it.publishable && it !is KotlinMetadataCompilation<*> }
+        .matching { it.publishable }
         .all { kotlinTarget ->
             if (kotlinTarget is KotlinAndroidTarget)
             // Android targets have their variants created in afterEvaluate; TODO handle this better?
