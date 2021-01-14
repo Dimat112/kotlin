@@ -29,6 +29,7 @@ open class KotlinMetadataTarget @Inject constructor(project: Project) :
         get() = super.artifactsTaskName
 
     override val kotlinComponents: Set<KotlinTargetComponent> by lazy {
+        /* TODO NOW
         if (!project.isKotlinGranularMetadataEnabled)
             super.kotlinComponents
         else {
@@ -51,7 +52,7 @@ open class KotlinMetadataTarget @Inject constructor(project: Project) :
                 )
             }
 
-            if (PropertiesProvider(project).enableCompatibilityMetadataVariant == true) {
+            if (PropertiesProvider(project).enableCompatibilityMetadataVariant) {
                 // Ensure that consumers who expect Kotlin 1.2.x metadata package can still get one:
                 // publish the old metadata artifact:
                 usageContexts += run {
@@ -80,6 +81,8 @@ open class KotlinMetadataTarget @Inject constructor(project: Project) :
             )
 
             setOf(component)
-        }
+            */
+        emptySet<KotlinTargetComponent>()
     }
 }
+

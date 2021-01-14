@@ -17,32 +17,84 @@ import org.gradle.api.component.SoftwareComponent
 import org.gradle.api.internal.component.SoftwareComponentInternal
 import org.gradle.api.internal.component.UsageContext
 import org.gradle.api.publish.maven.MavenPublication
-import org.jetbrains.kotlin.gradle.plugin.KotlinCompilation
-import org.jetbrains.kotlin.gradle.plugin.KotlinTarget
-import org.jetbrains.kotlin.gradle.plugin.ProjectLocalConfigurations
+import org.jetbrains.kotlin.gradle.dsl.kotlinExtension
+import org.jetbrains.kotlin.gradle.dsl.multiplatformExtension
+import org.jetbrains.kotlin.gradle.plugin.*
+import org.jetbrains.kotlin.gradle.plugin.KotlinCompilation.Companion.MAIN_COMPILATION_NAME
+import org.jetbrains.kotlin.gradle.plugin.PropertiesProvider
+import org.jetbrains.kotlin.gradle.plugin.usageByName
+import org.jetbrains.kotlin.gradle.targets.metadata.KotlinMetadataTargetConfigurator
+import org.jetbrains.kotlin.gradle.targets.metadata.isCompatibilityMetadataVariantEnabled
+import org.jetbrains.kotlin.gradle.targets.metadata.isKotlinGranularMetadataEnabled
 
 abstract class KotlinSoftwareComponent(
+    private val project: Project,
     private val name: String,
     protected val kotlinTargets: Iterable<KotlinTarget>
 ) : SoftwareComponentInternal, ComponentWithVariants {
 
-    private val metadataTarget: KotlinMetadataTarget
-        get() = kotlinTargets.filterIsInstance<KotlinMetadataTarget>().single()
-
-    override fun getUsages(): Set<UsageContext> = (metadataTarget.components.single() as SoftwareComponentInternal).usages
-
-    override fun getVariants(): Set<SoftwareComponent> =
-        kotlinTargets.minus(metadataTarget).flatMap { it.components }.toSet()
-
     override fun getName(): String = name
+
+    override fun getVariants(): Set<SoftwareComponent> = kotlinTargets
+        .filter { target -> target !is KotlinMetadataTarget }
+        .flatMap { it.components }.toSet()
+
+    override fun getUsages(): Set<UsageContext> {
+        val metadataTarget = project.multiplatformExtension.metadata()
+
+        if (!project.isKotlinGranularMetadataEnabled) {
+            val metadataCompilation = metadataTarget.compilations.getByName(MAIN_COMPILATION_NAME)
+            return metadataTarget.createUsageContexts(metadataCompilation)
+        }
+
+        return mutableSetOf<UsageContext>().apply {
+            // This usage value is only needed for Maven scope mapping. Don't replace it with a custom Kotlin Usage value
+            val javaApiUsage = project.usageByName("java-api-jars")
+
+            val allMetadataJar = project.tasks.named(KotlinMetadataTargetConfigurator.ALL_METADATA_JAR_NAME)
+            val allMetadataArtifact = project.artifacts.add(Dependency.ARCHIVES_CONFIGURATION, allMetadataJar) {
+                it.classifier = if (project.isCompatibilityMetadataVariantEnabled) "all" else ""
+            }
+
+            this += DefaultKotlinUsageContext(
+                compilation = metadataTarget.compilations.getByName(MAIN_COMPILATION_NAME),
+                usage = javaApiUsage,
+                dependencyConfigurationName = metadataTarget.apiElementsConfigurationName,
+                overrideConfigurationArtifacts = setOf(allMetadataArtifact)
+            )
+
+
+            if (project.isCompatibilityMetadataVariantEnabled) {
+                // Ensure that consumers who expect Kotlin 1.2.x metadata package can still get one:
+                // publish the old metadata artifact:
+                this += run {
+                    DefaultKotlinUsageContext(
+                        metadataTarget.compilations.getByName(MAIN_COMPILATION_NAME),
+                        javaApiUsage,
+                        /** this configuration is created by [KotlinMetadataTargetConfigurator.createCommonMainElementsConfiguration] */
+                        COMMON_MAIN_ELEMENTS_CONFIGURATION_NAME
+                    )
+                }
+            }
+        }
+    }
+
+
+    val sourcesArtifacts: Set<PublishArtifact> by lazy {
+        val sourcesJarTask = sourcesJarTask(project, lazy { project.kotlinExtension.sourceSets.toSet() }, null, name.toLowerCase())
+        val sourcesJarArtifact = project.artifacts.add(Dependency.ARCHIVES_CONFIGURATION, sourcesJarTask) { sourcesJarArtifact ->
+            sourcesJarArtifact.classifier = "sources"
+        }
+        setOf(sourcesJarArtifact)
+    }
 
     // This property is declared in the parent type to allow the usages to reference it without forcing the subtypes to load,
     // which is needed for compatibility with older Gradle versions
     var publicationDelegate: MavenPublication? = null
 }
 
-class KotlinSoftwareComponentWithCoordinatesAndPublication(name: String, kotlinTargets: Iterable<KotlinTarget>) :
-    KotlinSoftwareComponent(name, kotlinTargets), ComponentWithCoordinates {
+class KotlinSoftwareComponentWithCoordinatesAndPublication(project: Project, name: String, kotlinTargets: Iterable<KotlinTarget>) :
+    KotlinSoftwareComponent(project, name, kotlinTargets), ComponentWithCoordinates {
 
     override fun getCoordinates(): ModuleVersionIdentifier = getCoordinatesFromPublicationDelegateAndProject(
         publicationDelegate, kotlinTargets.first().project, null
