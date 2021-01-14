@@ -102,12 +102,6 @@ class KotlinSoftwareComponentWithCoordinatesAndPublication(project: Project, nam
     )
 }
 
-// At the moment all KN artifacts have JAVA_API usage.
-// TODO: Replace it with a specific usage
-object NativeUsage {
-    const val KOTLIN_KLIB = "kotlin-klib"
-}
-
 interface KotlinUsageContext : UsageContext {
     val compilation: KotlinCompilation<*>
     val dependencyConfigurationName: String
