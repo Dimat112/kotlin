@@ -40,21 +40,21 @@ abstract class KotlinSoftwareComponent(
         .filter { target -> target !is KotlinMetadataTarget }
         .flatMap { it.components }.toSet()
 
-    override fun getUsages(): Set<UsageContext> {
+    private val _usages: Set<UsageContext> by lazy {
         val metadataTarget = project.multiplatformExtension.metadata()
 
         if (!project.isKotlinGranularMetadataEnabled) {
             val metadataCompilation = metadataTarget.compilations.getByName(MAIN_COMPILATION_NAME)
-            return metadataTarget.createUsageContexts(metadataCompilation)
+            return@lazy metadataTarget.createUsageContexts(metadataCompilation)
         }
 
-        return mutableSetOf<UsageContext>().apply {
+        mutableSetOf<UsageContext>().apply {
             // This usage value is only needed for Maven scope mapping. Don't replace it with a custom Kotlin Usage value
             val javaApiUsage = project.usageByName("java-api-jars")
 
             val allMetadataJar = project.tasks.named(KotlinMetadataTargetConfigurator.ALL_METADATA_JAR_NAME)
-            val allMetadataArtifact = project.artifacts.add(Dependency.ARCHIVES_CONFIGURATION, allMetadataJar) {
-                it.classifier = if (project.isCompatibilityMetadataVariantEnabled) "all" else ""
+            val allMetadataArtifact = project.artifacts.add(Dependency.ARCHIVES_CONFIGURATION, allMetadataJar) { allMetadataArtifact ->
+                allMetadataArtifact.classifier = if (project.isCompatibilityMetadataVariantEnabled) "all" else ""
             }
 
             this += DefaultKotlinUsageContext(
@@ -78,6 +78,10 @@ abstract class KotlinSoftwareComponent(
                 }
             }
         }
+    }
+
+    override fun getUsages(): Set<UsageContext> {
+        return _usages
     }
 
 
