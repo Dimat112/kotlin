@@ -10,6 +10,8 @@ import com.intellij.codeInspection.ProblemsHolder
 import com.intellij.psi.search.searches.ReferencesSearch
 import org.jetbrains.kotlin.idea.KotlinBundle
 import com.intellij.psi.PsiElement
+import com.intellij.psi.util.parentOfType
+import org.jetbrains.kotlin.psi.psiUtil.containingClass
 import org.jetbrains.kotlin.idea.intentions.getCallableDescriptor
 import org.jetbrains.kotlin.idea.project.platform
 import org.jetbrains.kotlin.idea.references.KtSimpleNameReference
@@ -42,12 +44,19 @@ class MutationOfVariableWithSharedImmutableAnnotationInNativeInspection: Abstrac
             }
 
             fun searchWriteReferences(element: PsiElement): List<PsiReference> {
+
                 return ReferencesSearch.search(element, element.useScope)
                     .filter {
-                        (it as? KtSimpleNameReference)
+                        val simpleNameReference = it as? KtSimpleNameReference
+                        val containingClass = simpleNameReference?.element?.containingClass()
+                        val parentClass = it.resolve()?.parentOfType<KtClass>()
+
+                        val isInParentClass = containingClass == parentClass
+
+                        simpleNameReference
                             ?.element
                             ?.readWriteAccess(true)
-                            ?.isWrite == true
+                            ?.isWrite == true && !isInParentClass
                     }
             }
 
